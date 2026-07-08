@@ -201,8 +201,10 @@ local function generateFor(photo, settings)
   if not ok2 or type(m) ~= 'table' then
     return nil, 'model reply was not valid JSON'
   end
-  -- Stash the geocode result (if any) for optional write-back.
+  -- Stash the geocode result (if any) for optional write-back, and the
+  -- resolved location for the diagnostic summary.
   if geoAddr then m.__geo = geoAddr end
+  m.__loc = locationLabel
   return m
 end
 
@@ -260,7 +262,7 @@ LrTasks.startAsyncTask(function()
     })
     progress:setCancelable(true)
 
-    local done, failed, firstError = 0, 0, nil
+    local done, failed, firstError, lastLoc = 0, 0, nil, nil
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
@@ -271,6 +273,7 @@ LrTasks.startAsyncTask(function()
       -- and Lua 5.1 can't yield across a plain pcall's C boundary.
       local ok, m = LrTasks.pcall(generateFor, photo, settings)
       if ok and m then
+        lastLoc = m.__loc
         local wrote, werr = LrTasks.pcall(writeMetadata, catalog, photo, m, settings)
         if wrote then done = done + 1
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
@@ -283,6 +286,11 @@ LrTasks.startAsyncTask(function()
     progress:done()
 
     local summary = string.format('Done: %d written, %d failed.', done, failed)
+    if #photos == 1 and done == 1 then
+      summary = summary .. '\n\nLocation fed to model: ' ..
+        (lastLoc and lastLoc ~= '' and lastLoc
+         or '(none — no location field set, and GPS lookup found nothing/was off)')
+    end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
     LrDialogs.message('PhotoScribe', summary, failed > 0 and 'warning' or 'info')
   end)

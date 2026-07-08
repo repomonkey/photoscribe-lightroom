@@ -88,10 +88,10 @@ function M.buildPrompt(opts)
   local location = trim(opts.location or '')
   if location ~= '' then
     parts[#parts + 1] =
-      'This photo was taken at: ' .. location .. '. That location is accurate ' ..
-      'information (not a guess) — you may name it in the title, caption and ' ..
-      'keywords where it fits. Do not name a more specific spot than this ' ..
-      'unless you can read it in the image.'
+      'This photo was taken at: ' .. location .. '. This is accurate, provided ' ..
+      'information. Include this place name in the title and in the caption, ' ..
+      'and add it to the keywords. Do not name a more specific spot than this ' ..
+      'unless it is legible in the image.'
   end
 
   if opts.describePeople then
