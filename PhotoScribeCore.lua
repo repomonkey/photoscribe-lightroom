@@ -37,7 +37,9 @@ function M.cleanKeywords(raw, vocabList)
   end
   local out, seen = {}, {}
   for _, kw in ipairs(raw or {}) do
-    local k = trim(kw)
+    -- Normalise snake_case the model sometimes emits ("golden_hour") to
+    -- spaces, so it reads naturally and can snap to a spaced vocabulary term.
+    local k = trim(tostring(kw):gsub('_', ' '))
     if k ~= '' then
       local final = canon[k:lower()] or k
       local key = final:lower()
@@ -80,6 +82,18 @@ function M.buildPrompt(opts)
     parts[#parts + 1] = 'Context for this photo: ' .. context .. '.'
   end
 
+  -- A provided location is ground truth, not a guess — invite the model to
+  -- name it in the title/caption (this is what lets "Kiama" reach the prose,
+  -- not just the keywords).
+  local location = trim(opts.location or '')
+  if location ~= '' then
+    parts[#parts + 1] =
+      'This photo was taken at: ' .. location .. '. That location is accurate ' ..
+      'information (not a guess) — you may name it in the title, caption and ' ..
+      'keywords where it fits. Do not name a more specific spot than this ' ..
+      'unless you can read it in the image.'
+  end
+
   if opts.describePeople then
     parts[#parts + 1] =
       'If people are visible, describe their positions, roles and actions ' ..
@@ -103,7 +117,8 @@ function M.buildPrompt(opts)
   end
 
   parts[#parts + 1] =
-    'Only state a specific place, species, landmark, or person name if you ' ..
+    'Aside from the location and tags provided above (which are accurate), ' ..
+    'only state a specific place, species, landmark, or person name if you ' ..
     'are certain from the image; otherwise stay general (e.g. "a bridge over ' ..
     'a river"). Better general and correct than specific and wrong.'
 

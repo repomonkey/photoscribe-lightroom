@@ -125,17 +125,15 @@ local function resolveLocation(photo, settings)
   return nil, nil
 end
 
--- Assemble the per-photo context string from settings + catalog metadata.
-local function buildContext(photo, settings, locationLabel)
+-- Assemble the non-location context string (date + extra notes). Location is
+-- passed to the prompt separately so it can be framed as usable ground truth.
+local function buildContext(photo, settings)
   local parts = {}
   local extra = Core.trim(settings.extraContext or '')
   if extra ~= '' then parts[#parts + 1] = extra end
   if settings.useContext then
     local date = meta(photo, 'dateCreated')
     if date then parts[#parts + 1] = 'Date: ' .. date end
-    if locationLabel and locationLabel ~= '' then
-      parts[#parts + 1] = 'Location: ' .. locationLabel
-    end
   end
   return table.concat(parts, '; ')
 end
@@ -164,7 +162,8 @@ local function generateFor(photo, settings)
   local locationLabel, geoAddr = resolveLocation(photo, settings)
 
   local prompt = Core.buildPrompt({
-    context          = buildContext(photo, settings, locationLabel),
+    context          = buildContext(photo, settings),
+    location         = settings.useContext and locationLabel or nil,
     existingKeywords = settings.useContext and existingKeywords(photo) or {},
     describePeople   = settings.describePeople,
     vocab            = settings._vocabList,
