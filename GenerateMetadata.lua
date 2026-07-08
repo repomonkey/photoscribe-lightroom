@@ -124,7 +124,12 @@ local function resolveLocation(photo, settings)
   if not gps or not gps.latitude or not gps.longitude then
     return nil, nil, 'no GPS coordinates readable on this photo'
   end
-  local label, addr = reverseGeocode(gps.latitude, gps.longitude)
+  -- Never let a geocode hiccup fail the photo. LrTasks.pcall (reverseGeocode
+  -- yields on the HTTP call, so a plain pcall can't wrap it).
+  local ok, label, addr = LrTasks.pcall(reverseGeocode, gps.latitude, gps.longitude)
+  if not ok then
+    return nil, nil, 'GPS lookup errored: ' .. tostring(label)
+  end
   if not label then
     return nil, nil, string.format(
       'OpenStreetMap returned no place for %.5f, %.5f', gps.latitude, gps.longitude)
@@ -279,7 +284,9 @@ LrTasks.startAsyncTask(function()
 
       -- LrTasks.pcall (not plain pcall): these yield (sleep/HTTP/catalog write)
       -- and Lua 5.1 can't yield across a plain pcall's C boundary.
-      local ok, m = LrTasks.pcall(generateFor, photo, settings)
+      -- Capture err too: on a graceful (nil, msg) return pcall gives
+      -- (true, nil, msg); on a thrown error it gives (false, errObj).
+      local ok, m, err = LrTasks.pcall(generateFor, photo, settings)
       if ok and m then
         lastLoc = m.__loc
         lastDiag = m.__locDiag
@@ -288,7 +295,7 @@ LrTasks.startAsyncTask(function()
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
       else
         failed = failed + 1
-        firstError = firstError or (name .. ': ' .. tostring(m))
+        firstError = firstError or (name .. ': ' .. tostring(err or m))
       end
     end
 
