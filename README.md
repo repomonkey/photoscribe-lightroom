@@ -43,13 +43,24 @@ For each selected photo:
    (also in the right-click **Plug-in Extras** submenu).
 3. Watch the progress bar; a summary dialog reports how many were written.
 
-## Configuration (edit `GenerateMetadata.lua`)
+## Settings
 
-```lua
-local ENDPOINT = 'http://localhost:1234/v1/chat/completions'
-local MODEL    = 'google/gemma-4-12b'
-local MAX_LONG_EDGE = 1024   -- size of the render sent to the model
-```
+**Plug-in Extras → PhotoScribe Settings…** — no need to edit code:
+
+- **Model server URL** — LM Studio (`:1234`) or Ollama (`:11434`) OpenAI endpoint.
+- **Model name** — e.g. `google/gemma-4-12b`.
+- **Keyword density** — Fewer / Standard / More.
+- **Describe people** — generic roles/actions, never invented names.
+- **Use photo context** — feeds the capture date, location, and existing
+  keywords into the prompt (so it can build on tags you already have).
+- **Skip title/caption if already present** — protect existing values.
+- **Write title / Write caption** — toggle each.
+- **Keyword vocabulary** — your preferred keyword list. Generated keywords are
+  snapped to this spelling and these terms are preferred, which reins in the
+  model's tendency to invent odd taxonomy terms.
+- **Extra context** — freeform text added to every prompt.
+
+Settings persist between sessions.
 
 ## Status — what's verified vs not
 
@@ -69,17 +80,18 @@ Needs Lightroom itself to exercise:
 - ⏳ Writing `title` / `caption` / `keywords` into the catalog
   (`setRawMetadata`, `createKeyword`, `addKeyword`).
 
-## Not in the POC (obvious follow-ups)
+## Follow-ups
 
-- Options UI (endpoint, model, prompt, keyword density) via `LrView`.
-- Porting the desktop app's fuller prompt: batch/context, person-aware and
-  existing-tag awareness, keyword vocabulary snapping.
-- "Skip if already has a title/caption" and append-vs-replace keyword modes.
-- Ollama tested (only LM Studio's OpenAI shape is verified so far).
-- Packaging as a signed `.lrplugin` / Adobe Exchange listing.
+- Verify the Ollama endpoint end-to-end (only LM Studio's OpenAI shape is
+  confirmed so far; the call is OpenAI-compatible so it should work).
+- Package as a `.lrplugin` / Adobe Exchange listing.
+- Optional: append-vs-replace keyword modes; per-run overrides.
 
 ## Layout
 
-- `Info.lua` — plugin manifest + menu item.
+- `Info.lua` — plugin manifest + menu items.
 - `GenerateMetadata.lua` — the action (render → model → write).
+- `PhotoScribeSettings.lua` — the Settings dialog.
+- `PhotoScribeCore.lua` — pure-Lua prompt assembly + keyword snapping (unit-tested).
+- `PhotoScribePrefs.lua` — persisted preferences.
 - `json.lua` — dependency-free JSON decoder (Lua 5.1 compatible).
