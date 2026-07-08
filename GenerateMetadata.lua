@@ -106,6 +106,8 @@ end
 -- if there are none and GPS reverse-geocoding is enabled, looks it up.
 -- Returns (label, geoAddress) where geoAddress is non-nil only when we looked
 -- it up (so the caller can optionally write it back).
+-- Returns (label, geoAddress, diag). geoAddress is non-nil only when looked up
+-- (for optional write-back); diag explains the outcome for the summary.
 local function resolveLocation(photo, settings)
   local place = {}
   for _, key in ipairs({ 'location', 'city', 'stateProvince', 'country' }) do
@@ -113,16 +115,21 @@ local function resolveLocation(photo, settings)
     if v then place[#place + 1] = v end
   end
   if #place > 0 then
-    return table.concat(place, ', '), nil
+    return table.concat(place, ', '), nil, 'from catalog location fields'
   end
-  if settings.geocode then
-    local gps = photo:getRawMetadata('gps')
-    if gps and gps.latitude and gps.longitude then
-      local label, addr = reverseGeocode(gps.latitude, gps.longitude)
-      if label then return label, addr end
-    end
+  if not settings.geocode then
+    return nil, nil, '"Look up place names from GPS" is OFF in Settings'
   end
-  return nil, nil
+  local gps = photo:getRawMetadata('gps')
+  if not gps or not gps.latitude or not gps.longitude then
+    return nil, nil, 'no GPS coordinates readable on this photo'
+  end
+  local label, addr = reverseGeocode(gps.latitude, gps.longitude)
+  if not label then
+    return nil, nil, string.format(
+      'OpenStreetMap returned no place for %.5f, %.5f', gps.latitude, gps.longitude)
+  end
+  return label, addr, 'from GPS lookup'
 end
 
 -- Assemble the non-location context string (date + extra notes). Location is
@@ -159,7 +166,7 @@ local function generateFor(photo, settings)
   local bytes, err = getJpegBytes(photo, settings.maxLongEdge or 1024)
   if not bytes then return nil, 'render failed: ' .. tostring(err) end
 
-  local locationLabel, geoAddr = resolveLocation(photo, settings)
+  local locationLabel, geoAddr, locDiag = resolveLocation(photo, settings)
 
   local prompt = Core.buildPrompt({
     context          = buildContext(photo, settings),
@@ -205,6 +212,7 @@ local function generateFor(photo, settings)
   -- resolved location for the diagnostic summary.
   if geoAddr then m.__geo = geoAddr end
   m.__loc = locationLabel
+  m.__locDiag = locDiag
   return m
 end
 
@@ -262,7 +270,7 @@ LrTasks.startAsyncTask(function()
     })
     progress:setCancelable(true)
 
-    local done, failed, firstError, lastLoc = 0, 0, nil, nil
+    local done, failed, firstError, lastLoc, lastDiag = 0, 0, nil, nil, nil
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
@@ -274,6 +282,7 @@ LrTasks.startAsyncTask(function()
       local ok, m = LrTasks.pcall(generateFor, photo, settings)
       if ok and m then
         lastLoc = m.__loc
+        lastDiag = m.__locDiag
         local wrote, werr = LrTasks.pcall(writeMetadata, catalog, photo, m, settings)
         if wrote then done = done + 1
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
@@ -287,9 +296,12 @@ LrTasks.startAsyncTask(function()
 
     local summary = string.format('Done: %d written, %d failed.', done, failed)
     if #photos == 1 and done == 1 then
-      summary = summary .. '\n\nLocation fed to model: ' ..
-        (lastLoc and lastLoc ~= '' and lastLoc
-         or '(none — no location field set, and GPS lookup found nothing/was off)')
+      if lastLoc and lastLoc ~= '' then
+        summary = summary .. '\n\nLocation fed to model: ' .. lastLoc ..
+          '\n(' .. tostring(lastDiag) .. ')'
+      else
+        summary = summary .. '\n\nNo location fed to model: ' .. tostring(lastDiag)
+      end
     end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
     LrDialogs.message('PhotoScribe', summary, failed > 0 and 'warning' or 'info')
