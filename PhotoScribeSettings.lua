@@ -59,6 +59,15 @@ LrFunctionContext.callWithContext('PhotoScribeSettings', function(context)
     f:checkbox { title = 'Use photo context (capture date, location, existing keywords)', value = bind 'useContext' },
     f:checkbox { title = 'Skip title/caption if the photo already has one', value = bind 'skipExisting' },
 
+    f:checkbox {
+      title = 'Look up place names from GPS when no location is set (uses OpenStreetMap — an external request)',
+      value = bind 'geocode',
+    },
+    f:row {
+      f:spacer { width = 20 },
+      f:checkbox { title = 'Also write the looked-up place into the catalog (Sublocation/City/State/Country)', value = bind 'writeGeocode' },
+    },
+
     f:row {
       f:checkbox { title = 'Write title', value = bind 'writeTitle' },
       f:checkbox { title = 'Write caption', value = bind 'writeCaption' },

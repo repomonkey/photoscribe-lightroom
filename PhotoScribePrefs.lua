@@ -20,6 +20,8 @@ M.DEFAULTS = {
   writeTitle     = true,
   writeCaption   = true,
   useContext     = true,         -- feed capture date / location / existing keywords
+  geocode        = false,        -- reverse-geocode GPS via OpenStreetMap when no location fields
+  writeGeocode   = false,        -- write the looked-up place back into the catalog
   vocabulary     = '',           -- newline/comma-separated preferred keywords
   extraContext   = '',           -- freeform text added to every prompt
 }

@@ -72,20 +72,70 @@ local function existingKeywords(photo)
   return names
 end
 
+-- Reverse-geocode GPS to a readable place via OpenStreetMap Nominatim.
+-- Returns (label, addressTable) or nil. Only called when enabled and needed,
+-- so we stay well within Nominatim's usage policy (1 req/sec).
+local function reverseGeocode(lat, lon)
+  local url = string.format(
+    'https://nominatim.openstreetmap.org/reverse?format=json&lat=%.6f&lon=%.6f&zoom=13&addressdetails=1',
+    lat, lon)
+  local headers = { {
+    field = 'User-Agent',
+    value = 'PhotoScribe-Lightroom/0.3 (+https://github.com/repomonkey/photoscribe-lightroom)',
+  } }
+  local resp = LrHttp.get(url, headers, 15)
+  if not resp or resp == '' then return nil end
+  local ok, data = pcall(json.decode, resp)
+  if not ok or type(data) ~= 'table' or type(data.address) ~= 'table' then return nil end
+  local a = data.address
+  -- Prefer the most specific settlement-like name. `locality`/`neighbourhood`
+  -- matter for rural/coastal AU spots (e.g. "Shoalhaven Heads" comes back as
+  -- locality, not town).
+  local place = a.suburb or a.town or a.village or a.hamlet or a.locality
+             or a.neighbourhood or a.city or a.municipality or a.county
+  local out = {}
+  if place then out[#out + 1] = place end
+  if a.state then out[#out + 1] = a.state end
+  if a.country then out[#out + 1] = a.country end
+  local label = table.concat(out, ', ')
+  if label == '' then return nil end
+  return label, a
+end
+
+-- Determine a location string for the photo. Prefers existing catalog fields;
+-- if there are none and GPS reverse-geocoding is enabled, looks it up.
+-- Returns (label, geoAddress) where geoAddress is non-nil only when we looked
+-- it up (so the caller can optionally write it back).
+local function resolveLocation(photo, settings)
+  local place = {}
+  for _, key in ipairs({ 'location', 'city', 'stateProvince', 'country' }) do
+    local v = meta(photo, key)
+    if v then place[#place + 1] = v end
+  end
+  if #place > 0 then
+    return table.concat(place, ', '), nil
+  end
+  if settings.geocode then
+    local gps = photo:getRawMetadata('gps')
+    if gps and gps.latitude and gps.longitude then
+      local label, addr = reverseGeocode(gps.latitude, gps.longitude)
+      if label then return label, addr end
+    end
+  end
+  return nil, nil
+end
+
 -- Assemble the per-photo context string from settings + catalog metadata.
-local function photoContext(photo, settings)
+local function buildContext(photo, settings, locationLabel)
   local parts = {}
   local extra = Core.trim(settings.extraContext or '')
   if extra ~= '' then parts[#parts + 1] = extra end
   if settings.useContext then
     local date = meta(photo, 'dateCreated')
     if date then parts[#parts + 1] = 'Date: ' .. date end
-    local place = {}
-    for _, key in ipairs({ 'location', 'city', 'stateProvince', 'country' }) do
-      local v = meta(photo, key)
-      if v then place[#place + 1] = v end
+    if locationLabel and locationLabel ~= '' then
+      parts[#parts + 1] = 'Location: ' .. locationLabel
     end
-    if #place > 0 then parts[#parts + 1] = 'Location: ' .. table.concat(place, ', ') end
   end
   return table.concat(parts, '; ')
 end
@@ -111,8 +161,10 @@ local function generateFor(photo, settings)
   local bytes, err = getJpegBytes(photo, settings.maxLongEdge or 1024)
   if not bytes then return nil, 'render failed: ' .. tostring(err) end
 
+  local locationLabel, geoAddr = resolveLocation(photo, settings)
+
   local prompt = Core.buildPrompt({
-    context          = photoContext(photo, settings),
+    context          = buildContext(photo, settings, locationLabel),
     existingKeywords = settings.useContext and existingKeywords(photo) or {},
     describePeople   = settings.describePeople,
     vocab            = settings._vocabList,
@@ -150,6 +202,8 @@ local function generateFor(photo, settings)
   if not ok2 or type(m) ~= 'table' then
     return nil, 'model reply was not valid JSON'
   end
+  -- Stash the geocode result (if any) for optional write-back.
+  if geoAddr then m.__geo = geoAddr end
   return m
 end
 
@@ -173,6 +227,16 @@ local function writeMetadata(catalog, photo, m, settings)
         local keyword = catalog:createKeyword(kw, {}, false, nil, true)
         if keyword then photo:addKeyword(keyword) end
       end
+    end
+
+    -- Optionally write the reverse-geocoded place into the catalog fields.
+    if settings.writeGeocode and type(m.__geo) == 'table' then
+      local a = m.__geo
+      local city = a.suburb or a.town or a.village or a.hamlet or a.locality
+                or a.neighbourhood or a.city or a.municipality
+      if city then photo:setRawMetadata('city', city) end
+      if a.state then photo:setRawMetadata('stateProvince', a.state) end
+      if a.country then photo:setRawMetadata('country', a.country) end
     end
   end, { timeout = 30 })
 end

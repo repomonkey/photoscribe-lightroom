@@ -53,6 +53,11 @@ For each selected photo:
 - **Describe people** — generic roles/actions, never invented names.
 - **Use photo context** — feeds the capture date, location, and existing
   keywords into the prompt (so it can build on tags you already have).
+- **Look up place names from GPS** — when a photo has GPS but no location
+  fields, reverse-geocodes via OpenStreetMap (Nominatim) so the caption can
+  name the place. Opt-in (an external request); only fires when there's GPS
+  and no location already set. Optionally writes the result back into the
+  catalog's Sublocation/City/State/Country fields.
 - **Skip title/caption if already present** — protect existing values.
 - **Write title / Write caption** — toggle each.
 - **Keyword vocabulary** — your preferred keyword list. Generated keywords are
