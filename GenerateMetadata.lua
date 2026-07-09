@@ -233,7 +233,9 @@ local function generateFor(photo, settings)
     local okf, v = pcall(function() return photo:getFormattedMetadata(key) end)
     return (okf and v and v ~= '' and v) or '(empty)'
   end
-  m.__kwDebug = 'getRawMetadata=' ..
+  m.__kwDebug = 'file=' .. fmt('fileName') ..
+    ' | existingTitle=' .. fmt('title') ..
+    ' | getRawMetadata=' ..
     (#allKw > 0 and table.concat(allKw, ', ') or '(none)') ..
     ' | keywordTags=' .. fmt('keywordTags') ..
     ' | forExport=' .. fmt('keywordTagsForExport')
