@@ -9,6 +9,7 @@ local LrBinding         = import 'LrBinding'
 local LrFunctionContext = import 'LrFunctionContext'
 
 local Prefs = require 'PhotoScribePrefs'
+local Core  = require 'PhotoScribeCore'
 
 LrFunctionContext.callWithContext('PhotoScribeSettings', function(context)
   local prefs = Prefs.raw()
@@ -17,6 +18,19 @@ LrFunctionContext.callWithContext('PhotoScribeSettings', function(context)
   local props = LrBinding.makePropertyTable(context)
   for k in pairs(Prefs.DEFAULTS) do
     props[k] = current[k]
+  end
+
+  -- Picking a prompt style loads its template into the editable prompt field
+  -- (the field is what's actually used, so users can then tweak it).
+  props:addObserver('promptStyle', function(properties, key, value)
+    if value and Core.PRESETS[value] then
+      properties.promptText = Core.PRESETS[value]
+    end
+  end)
+
+  local styleItems = {}
+  for _, name in ipairs(Core.presetNames()) do
+    styleItems[#styleItems + 1] = { title = name, value = name }
   end
 
   local f = LrView.osFactory()
@@ -51,6 +65,17 @@ LrFunctionContext.callWithContext('PhotoScribeSettings', function(context)
           { title = 'More (15-25)',    value = 'more' },
         },
       },
+    },
+
+    f:row {
+      f:static_text { title = 'Prompt style:', width = labelWidth },
+      f:popup_menu { value = bind 'promptStyle', items = styleItems },
+      f:static_text { title = '(loads a template below — then edit freely)', font = '<system/small>' },
+    },
+    f:edit_field {
+      value = bind 'promptText',
+      width_in_chars = 52,
+      height_in_lines = 4,
     },
 
     f:spacer { height = 6 },

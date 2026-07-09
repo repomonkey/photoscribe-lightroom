@@ -62,6 +62,41 @@ function M.densityPhrase(density)
   return DENSITY[density] or DENSITY.standard
 end
 
+-- Editable base-prompt presets (the "style"). Genre steer only — the keyword
+-- count comes from the density setting, and context/location/people/tags/JSON
+-- scaffolding is added by buildPrompt, so presets stay short and editable.
+M.PRESET_ORDER = { 'Default', 'Landscape', 'Event', 'Product' }
+
+M.PRESETS = {
+  Default =
+    'You are a photo metadata generator. Look at the image and write a short, ' ..
+    'descriptive title (5-10 words) and a caption of 1-3 sentences, plus a set ' ..
+    'of relevant keywords.',
+  Landscape =
+    'You are writing metadata for a landscape or nature photograph. Write a ' ..
+    'short, evocative title (5-10 words) and a caption of 1-3 sentences that ' ..
+    'convey the setting, light, weather and mood, plus a set of relevant ' ..
+    'keywords. Emphasise natural features, terrain, conditions and time of day.',
+  Event =
+    'You are writing metadata for an event or documentary photograph. Write a ' ..
+    'short, descriptive title (5-10 words) and a caption of 1-3 sentences that ' ..
+    'convey the activity, atmosphere and setting, plus a set of relevant ' ..
+    'keywords. Describe what is happening and the roles of any people.',
+  Product =
+    'You are writing metadata for a product or commercial photograph. Write a ' ..
+    'short, clean title (5-10 words) and a caption of 1-3 sentences describing ' ..
+    'the product, its materials, colour, form and setting, plus a set of ' ..
+    'relevant keywords. Keep the tone neutral and commercial.',
+}
+
+function M.presetNames()
+  return M.PRESET_ORDER
+end
+
+function M.presetText(name)
+  return M.PRESETS[name] or M.PRESETS.Default
+end
+
 -- Build the prompt text from a plain options table:
 --   context         string  (may be '')
 --   existingKeywords table   (list of strings)
@@ -72,10 +107,11 @@ function M.buildPrompt(opts)
   opts = opts or {}
   local parts = {}
 
-  parts[#parts + 1] =
-    'You are a photo metadata generator. Look at the image and produce a ' ..
-    'short descriptive title (5-10 words), a caption of 1-3 sentences, and ' ..
-    'about ' .. M.densityPhrase(opts.density) .. ' keywords.'
+  -- Base prompt: the user's editable style text (falls back to Default).
+  local base = trim(opts.basePrompt or '')
+  if base == '' then base = M.PRESETS.Default end
+  parts[#parts + 1] = base
+  parts[#parts + 1] = 'Aim for about ' .. M.densityPhrase(opts.density) .. ' keywords.'
 
   local context = trim(opts.context or '')
   if context ~= '' then
@@ -95,9 +131,18 @@ function M.buildPrompt(opts)
   end
 
   if opts.describePeople then
-    parts[#parts + 1] =
-      'If people are visible, describe their positions, roles and actions ' ..
-      'generically (e.g. "a group of hikers"); do not invent names.'
+    local persons = opts.persons or {}
+    if #persons > 0 then
+      parts[#parts + 1] =
+        'People identified in this photo: ' .. table.concat(persons, ', ') ..
+        '. Use these exact names when referring to them in the title and ' ..
+        'caption, and include them in the keywords. Never invent names; refer ' ..
+        'to any other, unnamed people neutrally (e.g. "another person").'
+    else
+      parts[#parts + 1] =
+        'If people are visible, describe their positions, roles and actions ' ..
+        'generically (e.g. "a group of hikers"); do not invent names.'
+    end
   end
 
   local existing = opts.existingKeywords or {}
@@ -117,10 +162,10 @@ function M.buildPrompt(opts)
   end
 
   parts[#parts + 1] =
-    'Aside from the location and tags provided above (which are accurate), ' ..
-    'only state a specific place, species, landmark, or person name if you ' ..
-    'are certain from the image; otherwise stay general (e.g. "a bridge over ' ..
-    'a river"). Better general and correct than specific and wrong.'
+    'Aside from the location, people and tags provided above (which are ' ..
+    'accurate), only state a specific place, species, landmark, or person ' ..
+    'name if you are certain from the image; otherwise stay general (e.g. "a ' ..
+    'bridge over a river"). Better general and correct than specific and wrong.'
 
   return table.concat(parts, ' ')
 end

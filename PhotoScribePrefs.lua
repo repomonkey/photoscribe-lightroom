@@ -8,6 +8,8 @@
 local LrPrefs = import 'LrPrefs'
 local prefs = LrPrefs.prefsForPlugin()
 
+local Core = require 'PhotoScribeCore'
+
 local M = {}
 
 M.DEFAULTS = {
@@ -15,6 +17,8 @@ M.DEFAULTS = {
   model          = 'google/gemma-4-12b',
   maxLongEdge    = 1024,
   keywordDensity = 'standard',   -- 'fewer' | 'standard' | 'more'
+  promptStyle    = 'Default',    -- which preset the editable prompt was loaded from
+  promptText     = Core.PRESETS.Default,  -- the editable base prompt actually used
   describePeople = true,
   skipExisting   = false,
   writeTitle     = true,

@@ -50,7 +50,11 @@ For each selected photo:
 - **Model server URL** — LM Studio (`:1234`) or Ollama (`:11434`) OpenAI endpoint.
 - **Model name** — e.g. `google/gemma-4-12b`.
 - **Keyword density** — Fewer / Standard / More.
-- **Describe people** — generic roles/actions, never invented names.
+- **Prompt style** — Default / Landscape / Event / Product presets. Picking one
+  loads its template into an editable prompt box, which you can then tweak.
+- **Describe people** — describes people generically, and if a photo has named
+  faces (Lightroom's People feature), it uses those actual names in the title
+  and caption instead of "a person".
 - **Use photo context** — feeds the capture date, location, and existing
   keywords into the prompt (so it can build on tags you already have).
 - **Look up place names from GPS** — when a photo has GPS but no location

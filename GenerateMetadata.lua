@@ -60,16 +60,25 @@ local function meta(photo, key)
   return nil
 end
 
-local function existingKeywords(photo)
-  local names = {}
+-- Read a photo's keywords, split into person keywords (named faces, from
+-- Lightroom's People feature — keywordType == 'person') and regular keywords.
+local function readKeywords(photo)
+  local persons, regular = {}, {}
   local ok, list = pcall(function() return photo:getRawMetadata('keywords') end)
   if ok and list then
     for _, kw in ipairs(list) do
-      local ok2, name = pcall(function() return kw:getName() end)
-      if ok2 and name and name ~= '' then names[#names + 1] = name end
+      local name = select(2, pcall(function() return kw:getName() end))
+      if name and name ~= '' then
+        local ok2, attrs = pcall(function() return kw:getAttributes() end)
+        if ok2 and attrs and attrs.keywordType == 'person' then
+          persons[#persons + 1] = name
+        else
+          regular[#regular + 1] = name
+        end
+      end
     end
   end
-  return names
+  return persons, regular
 end
 
 -- Reverse-geocode GPS to a readable place via OpenStreetMap Nominatim.
@@ -173,10 +182,17 @@ local function generateFor(photo, settings)
 
   local locationLabel, geoAddr, locDiag = resolveLocation(photo, settings)
 
+  local persons, regularKeywords = {}, {}
+  if settings.useContext or settings.describePeople then
+    persons, regularKeywords = readKeywords(photo)
+  end
+
   local prompt = Core.buildPrompt({
+    basePrompt       = settings.promptText,
     context          = buildContext(photo, settings),
     location         = settings.useContext and locationLabel or nil,
-    existingKeywords = settings.useContext and existingKeywords(photo) or {},
+    existingKeywords = settings.useContext and regularKeywords or {},
+    persons          = settings.describePeople and persons or {},
     describePeople   = settings.describePeople,
     vocab            = settings._vocabList,
     density          = settings.keywordDensity,
