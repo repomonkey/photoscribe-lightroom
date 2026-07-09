@@ -235,8 +235,6 @@ local function generateFor(photo, settings)
   if geoAddr then m.__geo = geoAddr end
   m.__loc = locationLabel
   m.__locDiag = locDiag
-  m.__persons = #persons > 0 and table.concat(persons, ', ') or '(none)'
-  m.__kwDebug = #regularKw > 0 and table.concat(regularKw, ', ') or '(none)'
   return m
 end
 
@@ -294,8 +292,7 @@ LrTasks.startAsyncTask(function()
     })
     progress:setCancelable(true)
 
-    local done, failed, firstError, lastLoc, lastDiag, lastKwDebug = 0, 0, nil, nil, nil, nil
-    local lastPersons = nil
+    local done, failed, firstError, lastLoc, lastDiag = 0, 0, nil, nil, nil
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
@@ -310,8 +307,6 @@ LrTasks.startAsyncTask(function()
       if ok and m then
         lastLoc = m.__loc
         lastDiag = m.__locDiag
-        lastKwDebug = m.__kwDebug
-        lastPersons = m.__persons
         local wrote, werr = LrTasks.pcall(writeMetadata, catalog, photo, m, settings)
         if wrote then done = done + 1
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
@@ -331,8 +326,6 @@ LrTasks.startAsyncTask(function()
       else
         summary = summary .. '\n\nNo location fed to model: ' .. tostring(lastDiag)
       end
-      summary = summary .. '\n\nPeople found: ' .. tostring(lastPersons)
-      summary = summary .. '\nKeywords found: ' .. tostring(lastKwDebug)
     end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
     LrDialogs.message('PhotoScribe', summary, failed > 0 and 'warning' or 'info')
