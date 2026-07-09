@@ -70,8 +70,8 @@ local function existingKeywords(photo)
   local ok, list = pcall(function() return photo:getRawMetadata('keywords') end)
   if ok and list then
     for _, kw in ipairs(list) do
-      local name = select(2, pcall(function() return kw:getName() end))
-      if name and name ~= '' then names[#names + 1] = name end
+      local ok2, name = pcall(function() return kw:getName() end)
+      if ok2 and name and name ~= '' then names[#names + 1] = name end
     end
   end
   return names
@@ -226,7 +226,11 @@ local function generateFor(photo, settings)
   if geoAddr then m.__geo = geoAddr end
   m.__loc = locationLabel
   m.__locDiag = locDiag
-  m.__kwDebug = #existingKw > 0 and table.concat(existingKw, ', ') or '(none)'
+  -- Read keywords UNCONDITIONALLY for the diagnostic (independent of the
+  -- useContext setting), so (none) can't be blamed on context being off.
+  local allKw = existingKeywords(photo)
+  m.__kwDebug = (#allKw > 0 and table.concat(allKw, ', ') or '(none)')
+    .. '  [useContext=' .. tostring(settings.useContext) .. ']'
   return m
 end
 
