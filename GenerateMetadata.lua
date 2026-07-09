@@ -178,11 +178,13 @@ local function generateFor(photo, settings)
 
   local locationLabel, geoAddr, locDiag = resolveLocation(photo, settings)
 
+  local existingKw = settings.useContext and existingKeywords(photo) or {}
+
   local prompt = Core.buildPrompt({
     basePrompt       = settings.promptText,
     context          = buildContext(photo, settings),
     location         = settings.useContext and locationLabel or nil,
-    existingKeywords = settings.useContext and existingKeywords(photo) or {},
+    existingKeywords = existingKw,
     describePeople   = settings.describePeople,
     vocab            = settings._vocabList,
     density          = settings.keywordDensity,
@@ -224,6 +226,7 @@ local function generateFor(photo, settings)
   if geoAddr then m.__geo = geoAddr end
   m.__loc = locationLabel
   m.__locDiag = locDiag
+  m.__kwDebug = #existingKw > 0 and table.concat(existingKw, ', ') or '(none)'
   return m
 end
 
@@ -281,7 +284,7 @@ LrTasks.startAsyncTask(function()
     })
     progress:setCancelable(true)
 
-    local done, failed, firstError, lastLoc, lastDiag = 0, 0, nil, nil, nil
+    local done, failed, firstError, lastLoc, lastDiag, lastKwDebug = 0, 0, nil, nil, nil, nil
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
@@ -296,6 +299,7 @@ LrTasks.startAsyncTask(function()
       if ok and m then
         lastLoc = m.__loc
         lastDiag = m.__locDiag
+        lastKwDebug = m.__kwDebug
         local wrote, werr = LrTasks.pcall(writeMetadata, catalog, photo, m, settings)
         if wrote then done = done + 1
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
@@ -315,6 +319,7 @@ LrTasks.startAsyncTask(function()
       else
         summary = summary .. '\n\nNo location fed to model: ' .. tostring(lastDiag)
       end
+      summary = summary .. '\n\nKeywords read from catalog: ' .. tostring(lastKwDebug)
     end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
     LrDialogs.message('PhotoScribe', summary, failed > 0 and 'warning' or 'info')
