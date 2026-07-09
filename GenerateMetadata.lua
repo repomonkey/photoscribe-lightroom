@@ -238,6 +238,13 @@ local function generateFor(photo, settings)
   m.__locDiag = locDiag
   m.__persons = table.concat(persons, ', ')
   m.__kwDebug = kwDebug
+  -- Probe alternate accessors for person/keyword data (diagnostic).
+  local function fmt(key)
+    local okf, v = pcall(function() return photo:getFormattedMetadata(key) end)
+    return (okf and v and v ~= '' and v) or '(empty)'
+  end
+  m.__kwTags   = fmt('keywordTags')
+  m.__kwExport = fmt('keywordTagsForExport')
   return m
 end
 
@@ -296,7 +303,7 @@ LrTasks.startAsyncTask(function()
     progress:setCancelable(true)
 
     local done, failed, firstError, lastLoc, lastDiag = 0, 0, nil, nil, nil
-    local lastPersons, lastKwDebug = nil, nil
+    local lastPersons, lastKwDebug, lastKwTags, lastKwExport = nil, nil, nil, nil
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
@@ -313,6 +320,8 @@ LrTasks.startAsyncTask(function()
         lastDiag = m.__locDiag
         lastPersons = m.__persons
         lastKwDebug = m.__kwDebug
+        lastKwTags = m.__kwTags
+        lastKwExport = m.__kwExport
         local wrote, werr = LrTasks.pcall(writeMetadata, catalog, photo, m, settings)
         if wrote then done = done + 1
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
@@ -334,8 +343,10 @@ LrTasks.startAsyncTask(function()
       end
       summary = summary .. '\n\nPeople found: ' ..
         (lastPersons and lastPersons ~= '' and lastPersons or '(none)')
-      summary = summary .. '\nAll keywords read [type]: ' ..
+      summary = summary .. '\ngetRawMetadata keywords: ' ..
         (lastKwDebug and lastKwDebug ~= '' and lastKwDebug or '(none)')
+      summary = summary .. '\nkeywordTags: ' .. tostring(lastKwTags)
+      summary = summary .. '\nkeywordTagsForExport: ' .. tostring(lastKwExport)
     end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
     LrDialogs.message('PhotoScribe', summary, failed > 0 and 'warning' or 'info')
