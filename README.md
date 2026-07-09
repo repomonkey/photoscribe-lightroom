@@ -71,30 +71,19 @@ For each selected photo:
 
 Settings persist between sessions.
 
-## Status — what's verified vs not
-
-Validated outside Lightroom (via the Lua interpreter + the live model):
-
-- ✅ The JSON decoder (`json.lua`) — objects, arrays, escapes, UTF-8.
-- ✅ The base64 encoder — against RFC 4648 test vectors.
-- ✅ The **full request/response round-trip** against LM Studio + Gemma-4-12B:
-  the exact payload this plugin builds is accepted, structured output returns
-  clean JSON, and our decoder extracts title/caption/keywords correctly.
-
-Needs Lightroom itself to exercise:
-
-- ⏳ `photo:requestJpegThumbnail` to get the image bytes (replaced an earlier
-  `LrExportSession` approach, which hit the SDK's "must not call on main UI
-  task" rule for renditions).
-- ⏳ Writing `title` / `caption` / `keywords` into the catalog
-  (`setRawMetadata`, `createKeyword`, `addKeyword`).
-
-## Follow-ups
+## Roadmap
 
 - Verify the Ollama endpoint end-to-end (only LM Studio's OpenAI shape is
   confirmed so far; the call is OpenAI-compatible so it should work).
-- Package as a `.lrplugin` / Adobe Exchange listing.
-- Optional: append-vs-replace keyword modes; per-run overrides.
+- Package as a one-click `.lrplugin` / Adobe Exchange listing.
+- Optional: a "keywords: vocabulary only" strict mode, and a "skip if already
+  keyworded" guard.
+
+## Support
+
+PhotoScribe is free and open source, and always will be. If it saves you time, you can support ongoing development on **[Patreon](https://www.patreon.com/c/AndyHutchinson)**, or with a one-off contribution via the **[anti-subscription page](https://andyhutchinson.com.au/the-anti-subscription/)** if you'd rather not sign up for anything. Entirely optional, and genuinely appreciated — and telling other photographers about it helps just as much.
+
+Built by [Andy Hutchinson](https://andyhutchinson.com.au).
 
 ## Layout
 
