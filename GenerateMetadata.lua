@@ -297,11 +297,16 @@ LrTasks.startAsyncTask(function()
     progress:setCancelable(true)
 
     local done, failed, firstError, lastLoc, lastDiag, lastKwDebug = 0, 0, nil, nil, nil, nil
+    local lastPath, targetCount = nil, #photos
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
       progress:setPortionComplete(i - 1, #photos)
       progress:setCaption('Processing ' .. name)
+
+      -- Fundamental read probe: does this photo object return its own path?
+      local okp, pth = pcall(function() return photo:getRawMetadata('path') end)
+      lastPath = okp and pth or ('ERR:' .. tostring(pth))
 
       -- LrTasks.pcall (not plain pcall): these yield (sleep/HTTP/catalog write)
       -- and Lua 5.1 can't yield across a plain pcall's C boundary.
@@ -331,6 +336,8 @@ LrTasks.startAsyncTask(function()
       else
         summary = summary .. '\n\nNo location fed to model: ' .. tostring(lastDiag)
       end
+      summary = summary .. '\n\ntarget photos: ' .. tostring(targetCount) ..
+        '\nphoto path: ' .. tostring(lastPath)
       summary = summary .. '\n\nKeywords read from catalog: ' .. tostring(lastKwDebug)
     end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
