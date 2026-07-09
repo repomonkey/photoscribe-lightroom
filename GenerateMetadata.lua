@@ -60,21 +60,29 @@ local function meta(photo, key)
   return nil
 end
 
--- A photo's keyword names. NOTE: Lightroom's face/person keywords (named
--- People) are NOT exposed through the SDK — getRawMetadata('keywords'),
--- keywordTags and keywordTagsForExport all omit them — so the plugin can't
--- read who's named in a photo (unlike the desktop app, which reads it from
--- file metadata). This returns only regular keywords.
-local function existingKeywords(photo)
-  local names = {}
-  local ok, list = pcall(function() return photo:getRawMetadata('keywords') end)
-  if ok and list then
+-- Read keywords, split into person keywords (named faces, keywordType ==
+-- 'person') and regular keywords.
+-- IMPORTANT: SDK metadata reads YIELD, and this runs under generateFor's
+-- LrTasks.pcall, so the reads must be DIRECT — never wrapped in a plain pcall,
+-- which is a C boundary Lua 5.1 can't yield across (that was returning empty
+-- for everything and led us badly astray).
+local function readKeywords(photo)
+  local persons, regular = {}, {}
+  local list = photo:getRawMetadata('keywords')
+  if list then
     for _, kw in ipairs(list) do
-      local ok2, name = pcall(function() return kw:getName() end)
-      if ok2 and name and name ~= '' then names[#names + 1] = name end
+      local name = kw:getName()
+      if name and name ~= '' then
+        local attrs = kw:getAttributes()
+        if attrs and attrs.keywordType == 'person' then
+          persons[#persons + 1] = name
+        else
+          regular[#regular + 1] = name
+        end
+      end
     end
   end
-  return names
+  return persons, regular
 end
 
 -- Reverse-geocode GPS to a readable place via OpenStreetMap Nominatim.
@@ -178,13 +186,14 @@ local function generateFor(photo, settings)
 
   local locationLabel, geoAddr, locDiag = resolveLocation(photo, settings)
 
-  local existingKw = settings.useContext and existingKeywords(photo) or {}
+  local persons, regularKw = readKeywords(photo)
 
   local prompt = Core.buildPrompt({
     basePrompt       = settings.promptText,
     context          = buildContext(photo, settings),
     location         = settings.useContext and locationLabel or nil,
-    existingKeywords = existingKw,
+    existingKeywords = settings.useContext and regularKw or {},
+    persons          = settings.describePeople and persons or {},
     describePeople   = settings.describePeople,
     vocab            = settings._vocabList,
     density          = settings.keywordDensity,
@@ -226,19 +235,8 @@ local function generateFor(photo, settings)
   if geoAddr then m.__geo = geoAddr end
   m.__loc = locationLabel
   m.__locDiag = locDiag
-  -- Probe every keyword accessor to find which one actually returns an applied
-  -- keyword (ZZTESTKW). getRawMetadata('keywords') has been returning nothing.
-  local allKw = existingKeywords(photo)
-  local function fmt(key)
-    local okf, v = pcall(function() return photo:getFormattedMetadata(key) end)
-    return (okf and v and v ~= '' and v) or '(empty)'
-  end
-  m.__kwDebug = 'file=' .. fmt('fileName') ..
-    ' | existingTitle=' .. fmt('title') ..
-    ' | getRawMetadata=' ..
-    (#allKw > 0 and table.concat(allKw, ', ') or '(none)') ..
-    ' | keywordTags=' .. fmt('keywordTags') ..
-    ' | forExport=' .. fmt('keywordTagsForExport')
+  m.__persons = #persons > 0 and table.concat(persons, ', ') or '(none)'
+  m.__kwDebug = #regularKw > 0 and table.concat(regularKw, ', ') or '(none)'
   return m
 end
 
@@ -297,16 +295,12 @@ LrTasks.startAsyncTask(function()
     progress:setCancelable(true)
 
     local done, failed, firstError, lastLoc, lastDiag, lastKwDebug = 0, 0, nil, nil, nil, nil
-    local lastPath, targetCount = nil, #photos
+    local lastPersons = nil
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
       progress:setPortionComplete(i - 1, #photos)
       progress:setCaption('Processing ' .. name)
-
-      -- Fundamental read probe: does this photo object return its own path?
-      local okp, pth = pcall(function() return photo:getRawMetadata('path') end)
-      lastPath = okp and pth or ('ERR:' .. tostring(pth))
 
       -- LrTasks.pcall (not plain pcall): these yield (sleep/HTTP/catalog write)
       -- and Lua 5.1 can't yield across a plain pcall's C boundary.
@@ -317,6 +311,7 @@ LrTasks.startAsyncTask(function()
         lastLoc = m.__loc
         lastDiag = m.__locDiag
         lastKwDebug = m.__kwDebug
+        lastPersons = m.__persons
         local wrote, werr = LrTasks.pcall(writeMetadata, catalog, photo, m, settings)
         if wrote then done = done + 1
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
@@ -336,9 +331,8 @@ LrTasks.startAsyncTask(function()
       else
         summary = summary .. '\n\nNo location fed to model: ' .. tostring(lastDiag)
       end
-      summary = summary .. '\n\ntarget photos: ' .. tostring(targetCount) ..
-        '\nphoto path: ' .. tostring(lastPath)
-      summary = summary .. '\n\nKeywords read from catalog: ' .. tostring(lastKwDebug)
+      summary = summary .. '\n\nPeople found: ' .. tostring(lastPersons)
+      summary = summary .. '\nKeywords found: ' .. tostring(lastKwDebug)
     end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
     LrDialogs.message('PhotoScribe', summary, failed > 0 and 'warning' or 'info')
