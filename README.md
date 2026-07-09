@@ -32,9 +32,13 @@ For each selected photo:
 
 ## Install
 
-1. In Lightroom Classic: **File → Plug-in Manager… → Add**.
-2. Select this `PhotoScribe.lrdevplugin` folder.
+**Easiest — download the packaged plugin:**
+
+1. Grab `PhotoScribe.lrplugin.zip` from the [latest release](https://github.com/repomonkey/photoscribe-lightroom/releases/latest) and unzip it → `PhotoScribe.lrplugin`.
+2. In Lightroom Classic: **File → Plug-in Manager… → Add**, and select `PhotoScribe.lrplugin`.
 3. It appears in the list as **PhotoScribe**.
+
+**Or from source** (for tinkering): clone this repo and **Add** the cloned folder in the Plug-in Manager — any folder containing `Info.lua` works.
 
 ## Use
 
