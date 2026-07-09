@@ -226,11 +226,17 @@ local function generateFor(photo, settings)
   if geoAddr then m.__geo = geoAddr end
   m.__loc = locationLabel
   m.__locDiag = locDiag
-  -- Read keywords UNCONDITIONALLY for the diagnostic (independent of the
-  -- useContext setting), so (none) can't be blamed on context being off.
+  -- Probe every keyword accessor to find which one actually returns an applied
+  -- keyword (ZZTESTKW). getRawMetadata('keywords') has been returning nothing.
   local allKw = existingKeywords(photo)
-  m.__kwDebug = (#allKw > 0 and table.concat(allKw, ', ') or '(none)')
-    .. '  [useContext=' .. tostring(settings.useContext) .. ']'
+  local function fmt(key)
+    local okf, v = pcall(function() return photo:getFormattedMetadata(key) end)
+    return (okf and v and v ~= '' and v) or '(empty)'
+  end
+  m.__kwDebug = 'getRawMetadata=' ..
+    (#allKw > 0 and table.concat(allKw, ', ') or '(none)') ..
+    ' | keywordTags=' .. fmt('keywordTags') ..
+    ' | forExport=' .. fmt('keywordTagsForExport')
   return m
 end
 
