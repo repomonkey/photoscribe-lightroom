@@ -1,26 +1,26 @@
-# PhotoScribe for Lightroom Classic — proof of concept
+# PhotoScribe for Lightroom Classic
 
-A minimal Lightroom Classic plugin that generates a **title, caption, and
-keywords** for the selected photos using a **local** model (LM Studio or
-Ollama) and writes them straight into the catalog — no cloud, no ExifTool,
-no export/import round-trip.
+A Lightroom Classic plugin that generates a **title, caption, and keywords**
+for your selected photos using a **local** AI model (LM Studio or Ollama) and
+writes them straight into the catalog — no cloud, no subscription, no
+export/import round-trip. Your photos never leave your machine.
 
-This is a **proof of concept**: one menu item, hard-coded endpoint/model, a
-simplified prompt. It exists to prove the round-trip works in Lua before
-building it out. The genuinely hard parts (the local model, the structured
-output that forces clean JSON) are shared with the standalone PhotoScribe app
-and carry over unchanged because they're just HTTP.
+Companion to the standalone [PhotoScribe](https://github.com/repomonkey/PhotoScribe)
+desktop app; it shares the same local-model approach and the structured-output
+schema that keeps the model's replies clean.
+
+![PhotoScribe Settings](docs/settings.webp)
 
 ## What it does
 
 For each selected photo:
 
-1. Renders a downsized JPEG (Lightroom's own render) to a temp file.
-2. Base64-encodes it and POSTs it to the local model, requesting structured
-   JSON (`{title, caption, keywords}`) — the same schema the desktop app uses,
-   which stops the model rambling in prose instead of answering.
-3. Parses the reply and writes `title`, `caption`, and `keywords` into the
-   catalog.
+1. Gets a downsized JPEG from Lightroom's own render.
+2. Builds a prompt from your settings and the photo's own context (capture
+   date, location, existing keywords, named people), then asks the local model
+   for structured JSON (`{title, caption, keywords}`).
+3. Snaps keywords to your vocabulary and writes `title`, `caption`, and
+   `keywords` into the catalog.
 
 ## Requirements
 
