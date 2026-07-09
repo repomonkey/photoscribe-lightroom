@@ -63,14 +63,16 @@ end
 -- Read a photo's keywords, split into person keywords (named faces, from
 -- Lightroom's People feature — keywordType == 'person') and regular keywords.
 local function readKeywords(photo)
-  local persons, regular = {}, {}
+  local persons, regular, dbg = {}, {}, {}
   local ok, list = pcall(function() return photo:getRawMetadata('keywords') end)
   if ok and list then
     for _, kw in ipairs(list) do
       local name = select(2, pcall(function() return kw:getName() end))
       if name and name ~= '' then
-        local ok2, attrs = pcall(function() return kw:getAttributes() end)
-        if ok2 and attrs and attrs.keywordType == 'person' then
+        local _, attrs = pcall(function() return kw:getAttributes() end)
+        local ktype = (type(attrs) == 'table' and attrs.keywordType) or 'nil'
+        dbg[#dbg + 1] = name .. '[' .. tostring(ktype) .. ']'
+        if ktype == 'person' then
           persons[#persons + 1] = name
         else
           regular[#regular + 1] = name
@@ -78,7 +80,7 @@ local function readKeywords(photo)
       end
     end
   end
-  return persons, regular
+  return persons, regular, table.concat(dbg, ', ')
 end
 
 -- Reverse-geocode GPS to a readable place via OpenStreetMap Nominatim.
@@ -182,9 +184,9 @@ local function generateFor(photo, settings)
 
   local locationLabel, geoAddr, locDiag = resolveLocation(photo, settings)
 
-  local persons, regularKeywords = {}, {}
+  local persons, regularKeywords, kwDebug = {}, {}, ''
   if settings.useContext or settings.describePeople then
-    persons, regularKeywords = readKeywords(photo)
+    persons, regularKeywords, kwDebug = readKeywords(photo)
   end
 
   local prompt = Core.buildPrompt({
@@ -234,6 +236,8 @@ local function generateFor(photo, settings)
   if geoAddr then m.__geo = geoAddr end
   m.__loc = locationLabel
   m.__locDiag = locDiag
+  m.__persons = table.concat(persons, ', ')
+  m.__kwDebug = kwDebug
   return m
 end
 
@@ -292,6 +296,7 @@ LrTasks.startAsyncTask(function()
     progress:setCancelable(true)
 
     local done, failed, firstError, lastLoc, lastDiag = 0, 0, nil, nil, nil
+    local lastPersons, lastKwDebug = nil, nil
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
@@ -306,6 +311,8 @@ LrTasks.startAsyncTask(function()
       if ok and m then
         lastLoc = m.__loc
         lastDiag = m.__locDiag
+        lastPersons = m.__persons
+        lastKwDebug = m.__kwDebug
         local wrote, werr = LrTasks.pcall(writeMetadata, catalog, photo, m, settings)
         if wrote then done = done + 1
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
@@ -325,6 +332,10 @@ LrTasks.startAsyncTask(function()
       else
         summary = summary .. '\n\nNo location fed to model: ' .. tostring(lastDiag)
       end
+      summary = summary .. '\n\nPeople found: ' ..
+        (lastPersons and lastPersons ~= '' and lastPersons or '(none)')
+      summary = summary .. '\nAll keywords read [type]: ' ..
+        (lastKwDebug and lastKwDebug ~= '' and lastKwDebug or '(none)')
     end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
     LrDialogs.message('PhotoScribe', summary, failed > 0 and 'warning' or 'info')
