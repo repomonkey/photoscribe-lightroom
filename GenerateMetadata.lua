@@ -60,27 +60,21 @@ local function meta(photo, key)
   return nil
 end
 
--- Read a photo's keywords, split into person keywords (named faces, from
--- Lightroom's People feature — keywordType == 'person') and regular keywords.
-local function readKeywords(photo)
-  local persons, regular, dbg = {}, {}, {}
+-- A photo's keyword names. NOTE: Lightroom's face/person keywords (named
+-- People) are NOT exposed through the SDK — getRawMetadata('keywords'),
+-- keywordTags and keywordTagsForExport all omit them — so the plugin can't
+-- read who's named in a photo (unlike the desktop app, which reads it from
+-- file metadata). This returns only regular keywords.
+local function existingKeywords(photo)
+  local names = {}
   local ok, list = pcall(function() return photo:getRawMetadata('keywords') end)
   if ok and list then
     for _, kw in ipairs(list) do
       local name = select(2, pcall(function() return kw:getName() end))
-      if name and name ~= '' then
-        local _, attrs = pcall(function() return kw:getAttributes() end)
-        local ktype = (type(attrs) == 'table' and attrs.keywordType) or 'nil'
-        dbg[#dbg + 1] = name .. '[' .. tostring(ktype) .. ']'
-        if ktype == 'person' then
-          persons[#persons + 1] = name
-        else
-          regular[#regular + 1] = name
-        end
-      end
+      if name and name ~= '' then names[#names + 1] = name end
     end
   end
-  return persons, regular, table.concat(dbg, ', ')
+  return names
 end
 
 -- Reverse-geocode GPS to a readable place via OpenStreetMap Nominatim.
@@ -184,17 +178,11 @@ local function generateFor(photo, settings)
 
   local locationLabel, geoAddr, locDiag = resolveLocation(photo, settings)
 
-  local persons, regularKeywords, kwDebug = {}, {}, ''
-  if settings.useContext or settings.describePeople then
-    persons, regularKeywords, kwDebug = readKeywords(photo)
-  end
-
   local prompt = Core.buildPrompt({
     basePrompt       = settings.promptText,
     context          = buildContext(photo, settings),
     location         = settings.useContext and locationLabel or nil,
-    existingKeywords = settings.useContext and regularKeywords or {},
-    persons          = settings.describePeople and persons or {},
+    existingKeywords = settings.useContext and existingKeywords(photo) or {},
     describePeople   = settings.describePeople,
     vocab            = settings._vocabList,
     density          = settings.keywordDensity,
@@ -236,15 +224,6 @@ local function generateFor(photo, settings)
   if geoAddr then m.__geo = geoAddr end
   m.__loc = locationLabel
   m.__locDiag = locDiag
-  m.__persons = table.concat(persons, ', ')
-  m.__kwDebug = kwDebug
-  -- Probe alternate accessors for person/keyword data (diagnostic).
-  local function fmt(key)
-    local okf, v = pcall(function() return photo:getFormattedMetadata(key) end)
-    return (okf and v and v ~= '' and v) or '(empty)'
-  end
-  m.__kwTags   = fmt('keywordTags')
-  m.__kwExport = fmt('keywordTagsForExport')
   return m
 end
 
@@ -303,7 +282,6 @@ LrTasks.startAsyncTask(function()
     progress:setCancelable(true)
 
     local done, failed, firstError, lastLoc, lastDiag = 0, 0, nil, nil, nil
-    local lastPersons, lastKwDebug, lastKwTags, lastKwExport = nil, nil, nil, nil
     for i, photo in ipairs(photos) do
       if progress:isCanceled() then break end
       local name = meta(photo, 'fileName') or ('photo ' .. i)
@@ -318,10 +296,6 @@ LrTasks.startAsyncTask(function()
       if ok and m then
         lastLoc = m.__loc
         lastDiag = m.__locDiag
-        lastPersons = m.__persons
-        lastKwDebug = m.__kwDebug
-        lastKwTags = m.__kwTags
-        lastKwExport = m.__kwExport
         local wrote, werr = LrTasks.pcall(writeMetadata, catalog, photo, m, settings)
         if wrote then done = done + 1
         else failed = failed + 1; firstError = firstError or (name .. ' write: ' .. tostring(werr)) end
@@ -341,12 +315,6 @@ LrTasks.startAsyncTask(function()
       else
         summary = summary .. '\n\nNo location fed to model: ' .. tostring(lastDiag)
       end
-      summary = summary .. '\n\nPeople found: ' ..
-        (lastPersons and lastPersons ~= '' and lastPersons or '(none)')
-      summary = summary .. '\ngetRawMetadata keywords: ' ..
-        (lastKwDebug and lastKwDebug ~= '' and lastKwDebug or '(none)')
-      summary = summary .. '\nkeywordTags: ' .. tostring(lastKwTags)
-      summary = summary .. '\nkeywordTagsForExport: ' .. tostring(lastKwExport)
     end
     if firstError then summary = summary .. '\n\nFirst error:\n' .. firstError end
     LrDialogs.message('PhotoScribe', summary, failed > 0 and 'warning' or 'info')

@@ -52,9 +52,11 @@ For each selected photo:
 - **Keyword density** — Fewer / Standard / More.
 - **Prompt style** — Default / Landscape / Event / Product presets. Picking one
   loads its template into an editable prompt box, which you can then tweak.
-- **Describe people** — describes people generically, and if a photo has named
-  faces (Lightroom's People feature), it uses those actual names in the title
-  and caption instead of "a person".
+- **Describe people** — describes people's roles/actions generically, never
+  inventing names. (It can't use Lightroom's *named* faces: the SDK doesn't
+  expose face/person data to plugins, so who's named in a photo is invisible
+  to us. The desktop PhotoScribe app can, because it reads it from file
+  metadata.)
 - **Use photo context** — feeds the capture date, location, and existing
   keywords into the prompt (so it can build on tags you already have).
 - **Look up place names from GPS** — when a photo has GPS but no location

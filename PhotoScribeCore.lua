@@ -131,18 +131,9 @@ function M.buildPrompt(opts)
   end
 
   if opts.describePeople then
-    local persons = opts.persons or {}
-    if #persons > 0 then
-      parts[#parts + 1] =
-        'People identified in this photo: ' .. table.concat(persons, ', ') ..
-        '. Use these exact names when referring to them in the title and ' ..
-        'caption, and include them in the keywords. Never invent names; refer ' ..
-        'to any other, unnamed people neutrally (e.g. "another person").'
-    else
-      parts[#parts + 1] =
-        'If people are visible, describe their positions, roles and actions ' ..
-        'generically (e.g. "a group of hikers"); do not invent names.'
-    end
+    parts[#parts + 1] =
+      'If people are visible, describe their positions, roles and actions ' ..
+      'generically (e.g. "a group of hikers"); do not invent names.'
   end
 
   local existing = opts.existingKeywords or {}
@@ -162,10 +153,10 @@ function M.buildPrompt(opts)
   end
 
   parts[#parts + 1] =
-    'Aside from the location, people and tags provided above (which are ' ..
-    'accurate), only state a specific place, species, landmark, or person ' ..
-    'name if you are certain from the image; otherwise stay general (e.g. "a ' ..
-    'bridge over a river"). Better general and correct than specific and wrong.'
+    'Aside from the location and tags provided above (which are accurate), ' ..
+    'only state a specific place, species, landmark, or person name if you ' ..
+    'are certain from the image; otherwise stay general (e.g. "a bridge over ' ..
+    'a river"). Better general and correct than specific and wrong.'
 
   return table.concat(parts, ' ')
 end

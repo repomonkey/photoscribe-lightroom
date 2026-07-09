@@ -16,7 +16,7 @@ return {
   LrToolkitIdentifier = 'au.com.andyhutchinson.photoscribe',
   LrPluginName = 'PhotoScribe',
 
-  VERSION = { major = 0, minor = 4, revision = 2, build = 0 },
+  VERSION = { major = 0, minor = 4, revision = 3, build = 0 },
 
   -- File > Plug-in Extras (where DxO, ON1, Peakto, etc. appear).
   LrExportMenuItems = {
